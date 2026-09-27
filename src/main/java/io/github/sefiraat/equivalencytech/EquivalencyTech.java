@@ -102,10 +102,10 @@ public class EquivalencyTech extends JavaPlugin {
 
         registerCommands();
 
-        // El EMC de los objetos de Slimefun se calcula ya con el servidor arriba, repartido entre
-        // ticks. Antes se hacia aqui mismo y bloqueaba el arranque casi un minuto -- y el
-        // 14-08-2026 no llego a terminar, dejando el servidor tres horas sin arrancar.
-        emcDefinitions.calcularSlimefunPorTandas(this);
+        // Paper 26.2 materializa recetas al consultarlas: el cálculo vanilla debe acabar antes
+        // de recorrer Slimefun y ambos se ejecutan tras el boot, repartidos entre ticks.
+        emcDefinitions.calcularVanillaPorTandas(this,
+                () -> emcDefinitions.calcularSlimefunPorTandas(this));
 
     }
 

@@ -21,6 +21,7 @@ import org.bukkit.inventory.StonecuttingRecipe;
 import javax.annotation.Nullable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.EnumSet;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
@@ -33,6 +34,13 @@ public class EmcDefinitions {
     private final Map<Material, Double> emcExtended = new EnumMap<> (Material.class);
     private final Map<String, Double> emcEQ = new HashMap<>();
     private final Map<String, Double> emcSlimefun = new HashMap<>();
+    /**
+     * Materiales vanilla que se están resolviendo en la rama actual de recetas.
+     * Las recetas de Paper pueden contener ciclos (por ejemplo, una receta alternativa
+     * que vuelve a pedir el resultado); sin este corte el cálculo de EMC bloquea el
+     * hilo de arranque antes de que el límite de profundidad alcance a protegerlo.
+     */
+    private final java.util.Set<Material> emcVanillaEnCurso = EnumSet.noneOf(Material.class);
 
     public Map<Material, Double> getEmcExtended() {
         return emcExtended;
@@ -49,7 +57,6 @@ public class EmcDefinitions {
     public EmcDefinitions(EquivalencyTech plugin) {
         fillBase(plugin);
         fillSpecialCases();
-        fillExtended(plugin);
         fillEQItems(plugin);
     }
 
@@ -128,19 +135,38 @@ public class EmcDefinitions {
         return emcBase.get(Material.BONE) != null ? emcBase.get(Material.BONE) / 3 : null;
     }
 
-    private void fillExtended(EquivalencyTech plugin) {
-        for (Material m : Material.values()) {
-            if (!m.isLegacy() && m.isItem() && !Utils.isBlacklistedMaterial(m)) {
-                ItemStack i = new ItemStack(m);
-                Double emcValue = getEmcValue(plugin, i, 1);
-                if (emcValue != null) {
-                    DebugLogs.logEmcPosted(plugin, emcValue, 1);
-                    emcExtended.put(i.getType(), roundDown(emcValue,2));
-                } else {
-                    DebugLogs.logEmcNull(plugin, 1);
-                }
+    /**
+     * Paper 26.2 materializa recetas al consultar {@code getRecipesFor}. Hacerlo para
+     * todos los materiales desde onEnable bloquea el arranque. Se conserva el cálculo
+     * completo, pero se reparte una consulta por tick una vez que Paper ya está vivo.
+     */
+    public void calcularVanillaPorTandas(EquivalencyTech plugin, Runnable alFinalizar) {
+        final List<Material> pendientes = new java.util.ArrayList<>();
+        for (Material material : Material.values()) {
+            if (!material.isLegacy() && material.isItem() && !Utils.isBlacklistedMaterial(material)) {
+                pendientes.add(material);
             }
         }
+        plugin.getLogger().info("Calculando EMC vanilla de " + pendientes.size()
+                + " materiales por tandas tras el arranque...");
+
+        final int[] indice = {0};
+        org.bukkit.Bukkit.getScheduler().runTaskTimer(plugin, tarea -> {
+            Material material = pendientes.get(indice[0]++);
+            ItemStack item = new ItemStack(material);
+            Double emcValue = getEmcValue(plugin, item, 1);
+            if (emcValue != null) {
+                DebugLogs.logEmcPosted(plugin, emcValue, 1);
+                emcExtended.put(item.getType(), roundDown(emcValue, 2));
+            } else {
+                DebugLogs.logEmcNull(plugin, 1);
+            }
+            if (indice[0] >= pendientes.size()) {
+                plugin.getLogger().info("EMC vanilla calculado: " + emcExtended.size() + " materiales.");
+                tarea.cancel();
+                alFinalizar.run();
+            }
+        }, 1L, 1L);
     }
 
     private void fillEQItems(EquivalencyTech plugin) {
@@ -285,14 +311,24 @@ public class EmcDefinitions {
             DebugLogs.logEmcNoRecipes(plugin, nestLevel);
             return null;
         } else {
-            for (Recipe r : Bukkit.getServer().getRecipesFor(i)) {
-                Double tempVal = checkRecipe(plugin, r,nestLevel + 1);
-                if (tempVal != null && (eVal.equals(0D) || tempVal < eVal)) {
-                    DebugLogs.logRecipeCheaper(plugin, nestLevel);
-                    eVal = tempVal;
-                } else if (tempVal != null) {
-                    DebugLogs.logRecipeNotCheaper(plugin, nestLevel);
+            // Sólo cortamos el ciclo de la rama actual: al volver se retira el
+            // material, por lo que siguen evaluándose recetas alternativas válidas.
+            if (!emcVanillaEnCurso.add(m)) {
+                DebugLogs.logEmcNull(plugin, nestLevel);
+                return null;
+            }
+            try {
+                for (Recipe r : recipeList) {
+                    Double tempVal = checkRecipe(plugin, r,nestLevel + 1);
+                    if (tempVal != null && (eVal.equals(0D) || tempVal < eVal)) {
+                        DebugLogs.logRecipeCheaper(plugin, nestLevel);
+                        eVal = tempVal;
+                    } else if (tempVal != null) {
+                        DebugLogs.logRecipeNotCheaper(plugin, nestLevel);
+                    }
                 }
+            } finally {
+                emcVanillaEnCurso.remove(m);
             }
         }
         DebugLogs.logEmcRecipeResult(plugin, eVal, nestLevel);

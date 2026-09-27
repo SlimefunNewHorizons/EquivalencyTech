@@ -34,6 +34,7 @@ public class EmcDefinitions {
     private final Map<Material, Double> emcExtended = new EnumMap<> (Material.class);
     private final Map<String, Double> emcEQ = new HashMap<>();
     private final Map<String, Double> emcSlimefun = new HashMap<>();
+    private boolean recipeRegistryCompatible = true;
     /**
      * Materiales vanilla que se están resolviendo en la rama actual de recetas.
      * Las recetas de Paper pueden contener ciclos (por ejemplo, una receta alternativa
@@ -169,6 +170,10 @@ public class EmcDefinitions {
         }, 1L, 1L);
     }
 
+    public boolean isRecipeRegistryCompatible() {
+        return recipeRegistryCompatible;
+    }
+
     private void fillEQItems(EquivalencyTech plugin) {
         for (Map.Entry<List<ItemStack>, ItemStack> recipeMap : Recipes.getEQRecipes(plugin).entrySet()) {
             ItemStack checkedItem = recipeMap.getValue();
@@ -289,7 +294,21 @@ public class EmcDefinitions {
         if (i == null || Utils.isBlacklisted(i)) {
             return null;
         }
-        List<Recipe> recipeList = Bukkit.getServer().getRecipesFor(i);
+        if (!recipeRegistryCompatible) {
+            return null;
+        }
+        List<Recipe> recipeList;
+        try {
+            recipeList = Bukkit.getServer().getRecipesFor(i);
+        } catch (IllegalArgumentException exception) {
+            // Purpur 26.2 rechaza al materializar algunas recetas de terceros con un
+            // resultado vacío. No se puede valorar el registro completo de forma segura;
+            // cortar aquí evita que una tarea por tick llene la consola con el mismo fallo.
+            recipeRegistryCompatible = false;
+            plugin.getLogger().warning("El registro de recetas contiene una entrada incompatible; "
+                    + "se omite el cálculo EMC derivado para proteger el servidor.");
+            return null;
+        }
         Material m = i.getType();
         Double eVal = 0D;
         DebugLogs.logEmcTestingItemStack(plugin, i.getType().name(), nestLevel);

@@ -105,7 +105,13 @@ public class EquivalencyTech extends JavaPlugin {
         // Paper 26.2 materializa recetas al consultarlas: el cálculo vanilla debe acabar antes
         // de recorrer Slimefun y ambos se ejecutan tras el boot, repartidos entre ticks.
         emcDefinitions.calcularVanillaPorTandas(this,
-                () -> emcDefinitions.calcularSlimefunPorTandas(this));
+                () -> {
+                    if (emcDefinitions.isRecipeRegistryCompatible()) {
+                        emcDefinitions.calcularSlimefunPorTandas(this);
+                    } else {
+                        getLogger().warning("Se conserva EMC base configurado; cálculo derivado omitido por recetas incompatibles.");
+                    }
+                });
 
     }
 

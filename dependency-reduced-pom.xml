@@ -74,7 +74,7 @@
   <repositories>
     <repository>
       <id>drakescraft-labs-maven</id>
-      <url>https://drakescraft-labs.github.io/maven-repo/</url>
+      <url>https://maven.drakescraft.cl/</url>
     </repository>
     <repository>
       <id>spigot-repo</id>
@@ -95,10 +95,6 @@
     <repository>
       <id>sk89q-repo</id>
       <url>https://maven.enginehub.org/repo/</url>
-    </repository>
-    <repository>
-      <id>repo</id>
-      <url>https://repo.mattstudios.me/artifactory/public/</url>
     </repository>
   </repositories>
   <dependencies>
@@ -142,16 +138,16 @@
     </dependency>
   </dependencies>
   <properties>
-    <maven.compiler.target>21</maven.compiler.target>
-    <sonar.projectKey>Sefiraat_EquivalencyTech</sonar.projectKey>
     <sonar.issue.ignore.multicriteria>e1,e2</sonar.issue.ignore.multicriteria>
-    <maven.compiler.source>21</maven.compiler.source>
     <sonar.issue.ignore.multicriteria.e2.ruleKey>java:S125</sonar.issue.ignore.multicriteria.e2.ruleKey>
     <sonar.host.url>https://sonarcloud.io</sonar.host.url>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <sonar.organization>sefiraat</sonar.organization>
     <sonar.issue.ignore.multicriteria.e1.resourceKey>**</sonar.issue.ignore.multicriteria.e1.resourceKey>
     <sonar.issue.ignore.multicriteria.e2.resourceKey>**</sonar.issue.ignore.multicriteria.e2.resourceKey>
     <sonar.issue.ignore.multicriteria.e1.ruleKey>java:S6212</sonar.issue.ignore.multicriteria.e1.ruleKey>
+    <maven.compiler.source>21</maven.compiler.source>
+    <sonar.organization>sefiraat</sonar.organization>
+    <maven.compiler.target>21</maven.compiler.target>
+    <sonar.projectKey>Sefiraat_EquivalencyTech</sonar.projectKey>
   </properties>
 </project>

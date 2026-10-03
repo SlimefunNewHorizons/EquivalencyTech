@@ -158,7 +158,7 @@
         <dependency>
             <groupId>com.github.drakescraft_labs</groupId>
             <artifactId>slimefun-core</artifactId>
-            <version>11.0-Drake-1.21.11-SNAPSHOT</version>
+            <version>11.0-Universal-26.x-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
         <dependency>

@@ -113,7 +113,7 @@
     <dependency>
       <groupId>com.github.drakescraft_labs</groupId>
       <artifactId>slimefun-core</artifactId>
-      <version>11.0-Drake-1.21.11-SNAPSHOT</version>
+      <version>11.0-Universal-26.x-SNAPSHOT</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
@@ -138,16 +138,16 @@
     </dependency>
   </dependencies>
   <properties>
+    <maven.compiler.target>21</maven.compiler.target>
+    <sonar.projectKey>Sefiraat_EquivalencyTech</sonar.projectKey>
     <sonar.issue.ignore.multicriteria>e1,e2</sonar.issue.ignore.multicriteria>
+    <maven.compiler.source>21</maven.compiler.source>
     <sonar.issue.ignore.multicriteria.e2.ruleKey>java:S125</sonar.issue.ignore.multicriteria.e2.ruleKey>
     <sonar.host.url>https://sonarcloud.io</sonar.host.url>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <sonar.organization>sefiraat</sonar.organization>
     <sonar.issue.ignore.multicriteria.e1.resourceKey>**</sonar.issue.ignore.multicriteria.e1.resourceKey>
     <sonar.issue.ignore.multicriteria.e2.resourceKey>**</sonar.issue.ignore.multicriteria.e2.resourceKey>
     <sonar.issue.ignore.multicriteria.e1.ruleKey>java:S6212</sonar.issue.ignore.multicriteria.e1.ruleKey>
-    <maven.compiler.source>21</maven.compiler.source>
-    <sonar.organization>sefiraat</sonar.organization>
-    <maven.compiler.target>21</maven.compiler.target>
-    <sonar.projectKey>Sefiraat_EquivalencyTech</sonar.projectKey>
   </properties>
 </project>

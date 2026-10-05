@@ -1,4 +1,4 @@
-<p align="center"><img src="https://raw.githubusercontent.com/DrakesCraft-Labs/EquivalencyTech/main/banner.svg" alt="EquivalencyTech banner" width="100%"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/SlimefunNewHorizons/EquivalencyTech/main/banner.svg" alt="EquivalencyTech banner" width="100%"></p>
 
 # EquivalencyTech
 
@@ -29,7 +29,7 @@ mvn -B -ntp clean package
 ```
 
 The deployable artifact is produced in `target/`. It requires
-[`Slimefun4-Drake`](https://github.com/DrakesCraft-Labs/Slimefun4-Drake) at runtime.
+[`Slimefun4-Drake`](https://github.com/SlimefunNewHorizons/Slimefun4-Drake) at runtime.
 
 ## Provenance
 
@@ -41,7 +41,7 @@ Original authorship and the GPL-3.0 license are preserved. DrakesCraft-Labs main
 
 ## 📄 License & Upstream Attribution
 
-This project is a sovereign fork maintained by [**JackStar6677-1**](https://github.com/JackStar6677-1) under [**DrakesCraft Labs**](https://github.com/DrakesCraft-Labs).
+This project is a sovereign fork maintained by [**JackStar6677-1**](https://github.com/JackStar6677-1) under [**DrakesCraft Labs**](https://github.com/SlimefunNewHorizons).
 
 - **Original Project:** Created by the upstream authors and the open-source community.
 - **DrakesCraft Optimizations:** Modernized for Paper/Purpur 1.21.11+, Java 21, high concurrency, asynchronous safety, and exploit/duplication prevention.

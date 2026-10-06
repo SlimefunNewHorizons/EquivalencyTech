@@ -1,6 +1,7 @@
 package io.github.sefiraat.equivalencytech;
 
 import co.aikar.commands.PaperCommandManager;
+import co.aikar.commands.lib.timings.TimingManager;
 import io.github.sefiraat.equivalencytech.commands.Commands;
 import io.github.sefiraat.equivalencytech.configuration.ConfigMain;
 import io.github.sefiraat.equivalencytech.item.EQItems;
@@ -14,6 +15,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.plugin.java.JavaPluginLoader;
 
 import java.io.File;
+import java.lang.reflect.Field;
 
 public class EquivalencyTech extends JavaPlugin {
 
@@ -123,12 +125,27 @@ public class EquivalencyTech extends JavaPlugin {
     }
 
     private void registerCommands() {
+        desactivarTimingsAcf();
         commandManager = new PaperCommandManager(this);
         // ACF 0.5 intenta leer por reflexión el antiguo campo CraftPlayer.locale, eliminado en
         // Paper 1.21. La interfaz del addon no necesita detectar idiomas por jugador, así que se
         // fija el locale del servidor y se evita un stack trace en cada conexión.
         commandManager.usePerIssuerLocale(false, false);
         commandManager.registerCommand(new Commands(this));
+    }
+
+    // ACF detecta co.aikar.timings.Timing y crea un timing por comando; Paper 26.x lo marca como
+    // deprecado y emite un WARN por cada uno al arrancar. Timings ya no mide nada en Paper, así que
+    // se fija el proveedor EMPTY de la copia relocalizada de ACF antes de crear el gestor.
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void desactivarTimingsAcf() {
+        try {
+            Field proveedor = TimingManager.class.getDeclaredField("timingProvider");
+            proveedor.setAccessible(true);
+            proveedor.set(null, Enum.valueOf((Class<? extends Enum>) proveedor.getType(), "EMPTY"));
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            getLogger().fine("No se pudieron desactivar los timings de ACF: " + e);
+        }
     }
 
 

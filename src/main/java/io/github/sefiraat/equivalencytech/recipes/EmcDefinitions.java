@@ -42,6 +42,18 @@ public class EmcDefinitions {
      * hilo de arranque antes de que el límite de profundidad alcance a protegerlo.
      */
     private final java.util.Set<Material> emcVanillaEnCurso = EnumSet.noneOf(Material.class);
+    /**
+     * Valores vanilla intermedios ya resueltos (sin redondear). Sin esta memoria cada
+     * material de la tanda recorría de nuevo todo el árbol de recetas, con una consulta
+     * {@code getRecipesFor} por nodo: en Paper 26.2 eso dejó el hilo principal >10 s
+     * colgado (watchdog, ticket #104). Solo se guardan resultados que no dependen de
+     * un corte de ciclo ni del límite de profundidad. La clave es la pila (cantidad 1)
+     * y no el material: {@code getRecipesFor} depende de la durabilidad, y los
+     * ingredientes de varias opciones llegan con durabilidad comodín.
+     */
+    private final Map<ItemStack, Double> emcVanillaMemo = new HashMap<>();
+    private final java.util.Set<ItemStack> emcVanillaSinValor = new java.util.HashSet<>();
+    private int emcVanillaCortes = 0;
 
     public Map<Material, Double> getEmcExtended() {
         return emcExtended;
@@ -297,22 +309,11 @@ public class EmcDefinitions {
         if (!recipeRegistryCompatible) {
             return null;
         }
-        List<Recipe> recipeList;
-        try {
-            recipeList = Bukkit.getServer().getRecipesFor(i);
-        } catch (IllegalArgumentException exception) {
-            // Purpur 26.2 rechaza al materializar algunas recetas de terceros con un
-            // resultado vacío. No se puede valorar el registro completo de forma segura;
-            // cortar aquí evita que una tarea por tick llene la consola con el mismo fallo.
-            recipeRegistryCompatible = false;
-            plugin.getLogger().warning("El registro de recetas contiene una entrada incompatible; "
-                    + "se omite el cálculo EMC derivado para proteger el servidor.");
-            return null;
-        }
         Material m = i.getType();
         Double eVal = 0D;
         DebugLogs.logEmcTestingItemStack(plugin, i.getType().name(), nestLevel);
         if (nestLevel > 15) {
+            emcVanillaCortes++;
             return null;
         }
         if (emcBase.containsKey(m)) {
@@ -326,16 +327,40 @@ public class EmcDefinitions {
         } else if (emcExtended.containsKey(m)) {
             DebugLogs.logEmcIsRegisteredExtended(plugin, emcExtended.get(m), nestLevel);
             return emcExtended.get(m);
-        } else if (recipeList.isEmpty()) {
+        }
+        final ItemStack clave = i.asOne();
+        if (emcVanillaMemo.containsKey(clave)) {
+            return emcVanillaMemo.get(clave);
+        } else if (emcVanillaSinValor.contains(clave)) {
+            return null;
+        }
+        // La consulta al registro es la parte cara en Paper 26.2: se hace solo cuando
+        // el material no tiene valor base, extendido ni memorizado.
+        List<Recipe> recipeList;
+        try {
+            recipeList = Bukkit.getServer().getRecipesFor(i);
+        } catch (IllegalArgumentException exception) {
+            // Purpur 26.2 rechaza al materializar algunas recetas de terceros con un
+            // resultado vacío. No se puede valorar el registro completo de forma segura;
+            // cortar aquí evita que una tarea por tick llene la consola con el mismo fallo.
+            recipeRegistryCompatible = false;
+            plugin.getLogger().warning("El registro de recetas contiene una entrada incompatible; "
+                    + "se omite el cálculo EMC derivado para proteger el servidor.");
+            return null;
+        }
+        if (recipeList.isEmpty()) {
             DebugLogs.logEmcNoRecipes(plugin, nestLevel);
+            emcVanillaSinValor.add(clave);
             return null;
         } else {
             // Sólo cortamos el ciclo de la rama actual: al volver se retira el
             // material, por lo que siguen evaluándose recetas alternativas válidas.
             if (!emcVanillaEnCurso.add(m)) {
+                emcVanillaCortes++;
                 DebugLogs.logEmcNull(plugin, nestLevel);
                 return null;
             }
+            final int cortesAntes = emcVanillaCortes;
             try {
                 for (Recipe r : recipeList) {
                     Double tempVal = checkRecipe(plugin, r,nestLevel + 1);
@@ -348,6 +373,9 @@ public class EmcDefinitions {
                 }
             } finally {
                 emcVanillaEnCurso.remove(m);
+            }
+            if (emcVanillaCortes == cortesAntes) {
+                emcVanillaMemo.put(clave, eVal);
             }
         }
         DebugLogs.logEmcRecipeResult(plugin, eVal, nestLevel);

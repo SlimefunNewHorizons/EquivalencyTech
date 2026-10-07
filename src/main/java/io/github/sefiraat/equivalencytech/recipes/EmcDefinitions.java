@@ -54,6 +54,17 @@ public class EmcDefinitions {
     private final Map<ItemStack, Double> emcVanillaMemo = new HashMap<>();
     private final java.util.Set<ItemStack> emcVanillaSinValor = new java.util.HashSet<>();
     private int emcVanillaCortes = 0;
+    /**
+     * Recetas vanilla agrupadas por material del resultado. En Paper 26.2 cada
+     * {@code getRecipesFor} recorre y materializa el registro completo; con los ~1300
+     * recetas que añade SaneCrafting, una sola tanda encadenaba cientos de recorridos y
+     * el watchdog saltaba 38 veces en staging. El índice se construye una vez, en un único
+     * tick (el coste de un solo {@code getRecipesFor}), y conserva su semántica de filtro.
+     */
+    @Nullable
+    private Map<Material, List<Recipe>> indiceRecetas;
+    /** Presupuesto por tick para la fase de materiales, una vez que el índice existe. */
+    private static final long PRESUPUESTO_TICK_NANOS = 20_000_000L;
 
     public Map<Material, Double> getEmcExtended() {
         return emcExtended;
@@ -165,21 +176,82 @@ public class EmcDefinitions {
 
         final int[] indice = {0};
         org.bukkit.Bukkit.getScheduler().runTaskTimer(plugin, tarea -> {
-            Material material = pendientes.get(indice[0]++);
-            ItemStack item = new ItemStack(material);
-            Double emcValue = getEmcValue(plugin, item, 1);
-            if (emcValue != null) {
-                DebugLogs.logEmcPosted(plugin, emcValue, 1);
-                emcExtended.put(item.getType(), roundDown(emcValue, 2));
-            } else {
-                DebugLogs.logEmcNull(plugin, 1);
+            if (indiceRecetas == null) {
+                // Tick propio para el índice: el iterador es una vista viva del registro y
+                // no puede repartirse entre ticks sin riesgo de ConcurrentModificationException.
+                indiceRecetas = indexarRecetasVanilla(plugin);
+                return;
             }
+            final long limite = System.nanoTime() + PRESUPUESTO_TICK_NANOS;
+            do {
+                Material material = pendientes.get(indice[0]++);
+                ItemStack item = new ItemStack(material);
+                Double emcValue = getEmcValue(plugin, item, 1);
+                if (emcValue != null) {
+                    DebugLogs.logEmcPosted(plugin, emcValue, 1);
+                    emcExtended.put(item.getType(), roundDown(emcValue, 2));
+                } else {
+                    DebugLogs.logEmcNull(plugin, 1);
+                }
+            } while (indice[0] < pendientes.size() && System.nanoTime() < limite);
             if (indice[0] >= pendientes.size()) {
                 plugin.getLogger().info("EMC vanilla calculado: " + emcExtended.size() + " materiales.");
                 tarea.cancel();
                 alFinalizar.run();
             }
         }, 1L, 1L);
+    }
+
+    /**
+     * Recorre una sola vez el registro de recetas. Las recetas cuyo resultado es un objeto
+     * de Slimefun (p. ej. las de la mesa mejorada convertidas por SaneCrafting) no definen
+     * el valor de un material vanilla y se excluyen; así el resultado no depende de si otro
+     * addon terminó de registrar recetas antes o después de este recorrido. Una receta que
+     * Paper no puede materializar se omite sola en lugar de anular todo el cálculo: el
+     * iterador ya avanzó antes de convertirla.
+     */
+    private Map<Material, List<Recipe>> indexarRecetasVanilla(EquivalencyTech plugin) {
+        final long inicio = System.nanoTime();
+        final Map<Material, List<Recipe>> indice = new EnumMap<>(Material.class);
+        final java.util.Iterator<Recipe> recetas = Bukkit.recipeIterator();
+        int total = 0;
+        int deSlimefun = 0;
+        int incompatibles = 0;
+        while (recetas.hasNext()) {
+            final Recipe receta;
+            try {
+                receta = recetas.next();
+            } catch (IllegalArgumentException exception) {
+                incompatibles++;
+                continue;
+            }
+            final ItemStack resultado = receta.getResult();
+            if (SlimefunItem.getByItem(resultado) != null) {
+                deSlimefun++;
+                continue;
+            }
+            indice.computeIfAbsent(resultado.getType(), material -> new java.util.ArrayList<>()).add(receta);
+            total++;
+        }
+        plugin.getLogger().info("Índice de recetas EMC: " + total + " recetas vanilla en "
+                + ((System.nanoTime() - inicio) / 1_000_000L) + " ms (" + deSlimefun
+                + " con resultado Slimefun excluidas, " + incompatibles + " incompatibles omitidas).");
+        return indice;
+    }
+
+    /** Misma regla que {@code CraftServer#getRecipesFor}: tipo igual y durabilidad igual o comodín (-1). */
+    private List<Recipe> recetasPara(ItemStack item) {
+        final List<Recipe> candidatas = indiceRecetas.getOrDefault(item.getType(), java.util.Collections.emptyList());
+        if (item.getDurability() == -1) {
+            return candidatas;
+        }
+        final List<Recipe> resultado = new java.util.ArrayList<>(candidatas.size());
+        for (Recipe receta : candidatas) {
+            if (receta.getResult().getDurability() == item.getDurability()) {
+                resultado.add(receta);
+            }
+        }
+        return resultado;
     }
 
     public boolean isRecipeRegistryCompatible() {
@@ -338,7 +410,7 @@ public class EmcDefinitions {
         // el material no tiene valor base, extendido ni memorizado.
         List<Recipe> recipeList;
         try {
-            recipeList = Bukkit.getServer().getRecipesFor(i);
+            recipeList = indiceRecetas != null ? recetasPara(i) : Bukkit.getServer().getRecipesFor(i);
         } catch (IllegalArgumentException exception) {
             // Purpur 26.2 rechaza al materializar algunas recetas de terceros con un
             // resultado vacío. No se puede valorar el registro completo de forma segura;

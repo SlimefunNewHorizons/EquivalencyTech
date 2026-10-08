@@ -16,6 +16,17 @@
             </resource>
         </resources>
         <plugins>
+            <!-- The 26.x branch must emit Java 25 bytecode; Maven's implicit
+                 compiler (3.1) ignores maven.compiler.release. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <release>${maven.compiler.release}</release>
+                </configuration>
+            </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
@@ -88,8 +99,7 @@
     </build>
 
     <properties>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <sonar.projectKey>Sefiraat_EquivalencyTech</sonar.projectKey>
         <sonar.organization>sefiraat</sonar.organization>

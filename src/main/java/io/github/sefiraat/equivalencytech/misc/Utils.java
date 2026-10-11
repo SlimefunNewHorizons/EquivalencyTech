@@ -13,9 +13,11 @@ import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
+import javax.annotation.Nullable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 
@@ -79,6 +81,9 @@ public class Utils {
         throw new IllegalStateException("Utility class");
     }
 
+    /** Mundos bloqueados en minusculas; se leen de la config una sola vez. */
+    private static Set<String> blockedWorlds;
+
     public static boolean isBlacklisted(ItemStack itemStack) {
         if (itemStack == null || itemStack.getType().isAir()) {
             return true;
@@ -86,18 +91,40 @@ public class Utils {
         if (BLACKLISTED_MATERIALS.contains(itemStack.getType())) {
             return true;
         }
+        return isBlacklisted(resolveSlimefunItem(itemStack));
+    }
+
+    /**
+     * Variante para quien ya resolvio el {@link SlimefunItem}: {@code getByItem} es la parte
+     * cara de leer un item y el tick de cofres la repetia hasta cuatro veces por pila.
+     */
+    public static boolean isBlacklisted(ItemStack itemStack, @Nullable SlimefunItem sfItem) {
+        if (itemStack == null || itemStack.getType().isAir()) {
+            return true;
+        }
+        if (BLACKLISTED_MATERIALS.contains(itemStack.getType())) {
+            return true;
+        }
+        return isBlacklisted(sfItem);
+    }
+
+    private static boolean isBlacklisted(@Nullable SlimefunItem sfItem) {
+        return sfItem != null && isBlacklistedSlimefunId(sfItem.getId());
+    }
+
+    /** {@code SlimefunItem.getByItem} protegido: null si Slimefun no esta o falla la consulta. */
+    @Nullable
+    public static SlimefunItem resolveSlimefunItem(ItemStack itemStack) {
         try {
-            if (EquivalencyTech.getInstance() != null
+            if (itemStack != null
+                    && EquivalencyTech.getInstance() != null
                     && EquivalencyTech.getInstance().getManagerSupportedPlugins() != null
                     && EquivalencyTech.getInstance().getManagerSupportedPlugins().isInstalledSlimefun()) {
-                SlimefunItem sfItem = SlimefunItem.getByItem(itemStack);
-                if (sfItem != null) {
-                    return isBlacklistedSlimefunId(sfItem.getId());
-                }
+                return SlimefunItem.getByItem(itemStack);
             }
         } catch (Throwable ignored) {
         }
-        return false;
+        return null;
     }
 
     public static boolean isBlacklistedMaterial(Material material) {
@@ -114,17 +141,22 @@ public class Utils {
     }
 
     public static Double getEMC(EquivalencyTech plugin, ItemStack itemStack) {
-        if (isBlacklisted(itemStack)) {
+        if (itemStack == null || itemStack.getType().isAir()) {
             return null;
         }
-        SlimefunItem sfItem = null;
-        if (EquivalencyTech.getInstance().getManagerSupportedPlugins().isInstalledSlimefun()) {
-            sfItem = SlimefunItem.getByItem(itemStack);
+        SlimefunItem sfItem = resolveSlimefunItem(itemStack);
+        return getEMC(plugin, itemStack, sfItem, ContainerStorage.isCraftable(itemStack, plugin));
+    }
+
+    /** Igual que {@link #getEMC(EquivalencyTech, ItemStack)} con el item ya clasificado. */
+    public static Double getEMC(EquivalencyTech plugin, ItemStack itemStack, @Nullable SlimefunItem sfItem, boolean isEQ) {
+        if (isBlacklisted(itemStack, sfItem)) {
+            return null;
         }
         if (sfItem != null) {
             return plugin.getEmcDefinitions().getEmcSlimefun().get(sfItem.getId());
         }
-        if (ContainerStorage.isCraftable(itemStack, plugin)) {
+        if (isEQ) {
             ItemStack eqStack = plugin.getEqItems().getEqItemMap().get(eqNameConfig(itemStack.getItemMeta().getDisplayName()));
             return plugin.getEmcDefinitions().getEmcEQ().get(eqStack.getItemMeta().getDisplayName());
         } else {
@@ -176,15 +208,20 @@ public class Utils {
     }
 
     public static boolean canBeSynth(EquivalencyTech plugin, ItemStack itemStack) {
-        if (isBlacklisted(itemStack)) {
+        if (itemStack == null || itemStack.getType().isAir()) {
+            return false;
+        }
+        SlimefunItem sfItem = resolveSlimefunItem(itemStack);
+        return canBeSynth(itemStack, sfItem, ContainerStorage.isCraftable(itemStack, plugin));
+    }
+
+    /** Igual que {@link #canBeSynth(EquivalencyTech, ItemStack)} con el item ya clasificado. */
+    public static boolean canBeSynth(ItemStack itemStack, @Nullable SlimefunItem sfItem, boolean isEQ) {
+        if (isBlacklisted(itemStack, sfItem)) {
             return false;
         }
         if (itemStack.hasItemMeta()) {
-            SlimefunItem sfItem = null;
-            if (EquivalencyTech.getInstance().getManagerSupportedPlugins().isInstalledSlimefun()) {
-                sfItem = SlimefunItem.getByItem(itemStack);
-            }
-            return ContainerStorage.isCraftable(itemStack, plugin) || sfItem != null;
+            return isEQ || sfItem != null;
         } else {
             return true;
         }
@@ -194,7 +231,18 @@ public class Utils {
         if (world == null || plugin == null) {
             return false;
         }
-        return isBlockedWorld(plugin.getConfig().getStringList("BLOCKED_WORLDS"), world.getName());
+        // Se consulta por cofre y por tick: releer la lista de la config en cada llamada
+        // era mas caro que el resto de la comprobacion.
+        if (blockedWorlds == null) {
+            Set<String> worlds = new HashSet<>();
+            for (String b : plugin.getConfig().getStringList("BLOCKED_WORLDS")) {
+                if (b != null) {
+                    worlds.add(b.trim().toLowerCase(Locale.ROOT));
+                }
+            }
+            blockedWorlds = worlds;
+        }
+        return blockedWorlds.contains(world.getName().toLowerCase(Locale.ROOT));
     }
 
     public static boolean isBlockedWorld(java.util.List<String> blockedWorlds, String worldName) {

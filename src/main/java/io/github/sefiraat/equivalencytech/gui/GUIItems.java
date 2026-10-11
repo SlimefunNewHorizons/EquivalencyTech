@@ -52,6 +52,11 @@ public class GUIItems {
     }
 
     public static ItemStack guiEMCItem(EquivalencyTech plugin, ItemStack itemStack, boolean isVanilla) {
+        return guiEMCItem(plugin, itemStack, isVanilla, Utils.getEMC(plugin, itemStack));
+    }
+
+    /** Variante con el EMC ya calculado, para no volver a resolver el item al pintar la GUI. */
+    public static ItemStack guiEMCItem(EquivalencyTech plugin, ItemStack itemStack, boolean isVanilla, Double emc) {
         ItemMeta im = itemStack.getItemMeta();
 
         if (isVanilla) {
@@ -62,15 +67,19 @@ public class GUIItems {
 
         im.addItemFlags(ItemFlag.HIDE_ENCHANTS);
 
-        im.setLore(getEmcItemLore(plugin, itemStack));
+        im.setLore(getEmcItemLore(plugin, emc));
         itemStack.setItemMeta(im);
         return itemStack;
     }
 
     public static List<String> getEmcItemLore(EquivalencyTech plugin, ItemStack itemStack) {
+        return getEmcItemLore(plugin, Utils.getEMC(plugin, itemStack));
+    }
+
+    public static List<String> getEmcItemLore(EquivalencyTech plugin, Double emc) {
         ConfigStrings c = plugin.getConfigMainClass().getStrings();
         List<String> lore = new ArrayList<>();
-        lore.add(Messages.THEME_EMC_PURPLE + "EMC: " + Utils.getEMC(plugin, itemStack));
+        lore.add(Messages.THEME_EMC_PURPLE + "EMC: " + emc);
         lore.add("");
         lore.add(Messages.THEME_CLICK_INSTRUCTION + "Left Click: " + ChatColor.WHITE + c.getGuiEntryLeftClick());
         lore.add(Messages.THEME_CLICK_INSTRUCTION + "Right Click: " + ChatColor.WHITE + c.getGuiEntryRightClick());

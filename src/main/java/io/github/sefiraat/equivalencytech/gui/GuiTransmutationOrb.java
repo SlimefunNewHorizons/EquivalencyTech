@@ -44,6 +44,12 @@ public final class GuiTransmutationOrb implements InventoryHolder {
     private final Player player;
     private final Inventory inventory;
     private int page;
+    /**
+     * Items aprendidos resueltos una vez por apertura. Antes cada clic (pagina, retirada,
+     * ingreso) resolvia y pintaba TODOS los aprendidos aunque solo se muestran 36. La lista
+     * solo cambia al aprender algo nuevo, y en ese caso el orbe se cierra.
+     */
+    private List<LearnedEntry> learnedEntries;
 
     private GuiTransmutationOrb(EquivalencyTech plugin, Player player) {
         this.plugin = plugin;
@@ -79,32 +85,68 @@ public final class GuiTransmutationOrb implements InventoryHolder {
         inventory.setItem(BACK_SLOT, navigationItem("Previous"));
         inventory.setItem(FORWARD_SLOT, navigationItem("Next"));
 
-        List<ItemStack> learnedItems = getLearnedItems();
+        List<LearnedEntry> learnedItems = getLearnedItems();
         int maxPage = maxPage(learnedItems.size());
         page = Math.max(0, Math.min(page, maxPage));
         int start = page * PAGE_SIZE;
+        ItemStack filler = null;
         for (int offset = 0; offset < PAGE_SIZE; offset++) {
             int itemIndex = start + offset;
-            ItemStack item = itemIndex < learnedItems.size()
-                ? learnedItems.get(itemIndex)
-                : GUIItems.guiOrbFiller(plugin);
+            ItemStack item;
+            if (itemIndex < learnedItems.size()) {
+                item = learnedItems.get(itemIndex).display(plugin);
+            } else {
+                if (filler == null) {
+                    filler = GUIItems.guiOrbFiller(plugin);
+                }
+                item = filler;
+            }
             inventory.setItem(9 + offset, item);
         }
     }
 
     /** Convierte los identificadores aprendidos en copias seguras para la GUI. */
-    private List<ItemStack> getLearnedItems() {
-        List<ItemStack> items = new ArrayList<>();
+    private List<LearnedEntry> getLearnedItems() {
+        if (learnedEntries != null) {
+            return learnedEntries;
+        }
+        List<LearnedEntry> items = new ArrayList<>();
         for (String id : ConfigMain.getLearnedItems(plugin, player.getUniqueId().toString())) {
             ItemStack item = resolveLearnedItem(id);
-            if (item == null || Utils.getEMC(plugin, item) == null) {
+            if (item == null) {
+                continue;
+            }
+            Double emc = Utils.getEMC(plugin, item);
+            if (emc == null) {
                 continue;
             }
             boolean vanilla = plugin.getEqItems().getEqItemMap().get(id) == null
                 && SlimefunItem.getById(id) == null;
-            items.add(GUIItems.guiEMCItem(plugin, item, vanilla));
+            items.add(new LearnedEntry(item, emc, vanilla));
         }
+        learnedEntries = items;
         return items;
+    }
+
+    /** Item aprendido ya resuelto; su icono de la GUI se construye solo al mostrarse. */
+    private static final class LearnedEntry {
+        private final ItemStack item;
+        private final Double emc;
+        private final boolean vanilla;
+        private ItemStack display;
+
+        private LearnedEntry(ItemStack item, Double emc, boolean vanilla) {
+            this.item = item;
+            this.emc = emc;
+            this.vanilla = vanilla;
+        }
+
+        private ItemStack display(EquivalencyTech plugin) {
+            if (display == null) {
+                display = GUIItems.guiEMCItem(plugin, item, vanilla, emc);
+            }
+            return display;
+        }
     }
 
     private ItemStack resolveLearnedItem(String id) {
@@ -192,7 +234,7 @@ public final class GuiTransmutationOrb implements InventoryHolder {
         }
 
         String entryName = itemEntryName(itemStack, equivalencyItem, slimefunItem);
-        boolean learned = ConfigMain.getLearnedItems(plugin, player.getUniqueId().toString()).contains(entryName);
+        boolean learned = ConfigMain.hasLearnedItem(plugin, player.getUniqueId().toString(), entryName);
         if (!learned) {
             ConfigMain.addLearnedItem(plugin, player.getUniqueId().toString(), entryName);
             player.sendMessage(Messages.messageGuiItemLearned(plugin));

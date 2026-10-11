@@ -71,7 +71,9 @@ public class RunnableEQTick extends BukkitRunnable {
                 }
                 warnedDOwners.remove(chestId);
 
-                BlockState state = location.getBlock().getState();
+                // Sin snapshot: getState() copiaba el tile entity entero (inventario incluido)
+                // y se pedia dos veces por cofre y por tick.
+                BlockState state = location.getBlock().getState(false);
 
                 if (!(state instanceof Chest)) {
                     if (warnedDChests.add(chestId)) {
@@ -82,27 +84,26 @@ public class RunnableEQTick extends BukkitRunnable {
 
                 warnedDChests.remove(chestId);
 
-                Chest chest = (Chest) location.getBlock().getState();
+                Chest chest = (Chest) state;
                 Inventory inventory = chest.getBlockInventory();
                 ItemStack[] contents = inventory.getContents();
                 for (int slot = 0; slot < contents.length; slot++) {
                     ItemStack itemStack = contents[slot];
                     if (itemStack != null && itemStack.getType() != Material.AIR) {
+                        // Se clasifica la pila una sola vez y se reutiliza en getEMC y canBeSynth,
+                        // que antes repetian getByItem y la lectura del PDC por su cuenta.
                         boolean isEQ = ContainerStorage.isCraftable(itemStack, plugin);
-                        SlimefunItem sfItem = null;
-                        if (sf) {
-                            sfItem = SlimefunItem.getByItem(itemStack);
-                        }
+                        SlimefunItem sfItem = sf ? Utils.resolveSlimefunItem(itemStack) : null;
                         Material material = itemStack.getType();
 
-                        Double emcBase = Utils.getEMC(plugin, itemStack);
+                        Double emcBase = Utils.getEMC(plugin, itemStack, sfItem, isEQ);
                         if (emcBase == null) {
                             continue;
                         }
                         // Ley de Entropia (Infinity Tier): se pierde el 50% al disolver (0.50x),
                         // impidiendo bucles y granjas infinitas de conversion.
                         Double emcValue = Utils.roundDown(emcBase * 0.50, 2);
-                        if (emcValue != null && emcValue > 0 && Utils.canBeSynth(plugin, itemStack)) {
+                        if (emcValue != null && emcValue > 0 && Utils.canBeSynth(itemStack, sfItem, isEQ)) {
                             String entryName;
                             if (isEQ) {
                                 entryName = Utils.eqNameConfig(itemStack.getItemMeta().getDisplayName());
@@ -111,7 +112,7 @@ public class RunnableEQTick extends BukkitRunnable {
                             } else {
                                 entryName = material.toString();
                             }
-                            if (!ConfigMain.getLearnedItems(plugin, playerUUID).contains(entryName)) {
+                            if (!ConfigMain.hasLearnedItem(plugin, playerUUID, entryName)) {
                                 ConfigMain.addLearnedItem(plugin, playerUUID, entryName);
                             }
                             ConfigMain.addPlayerEmc(plugin, playerUUID, emcValue);
@@ -158,7 +159,9 @@ public class RunnableEQTick extends BukkitRunnable {
                 }
                 warnedCOwners.remove(chestId);
 
-                BlockState state = location.getBlock().getState();
+                // Sin snapshot: getState() copiaba el tile entity entero (inventario incluido)
+                // y se pedia dos veces por cofre y por tick.
+                BlockState state = location.getBlock().getState(false);
 
                 if (!(state instanceof Chest)) {
                     if (warnedCChests.add(chestId)) {
@@ -169,11 +172,11 @@ public class RunnableEQTick extends BukkitRunnable {
 
                 warnedCChests.remove(chestId);
 
-                Chest chest = (Chest) location.getBlock().getState();
+                Chest chest = (Chest) state;
                 Inventory inventory = chest.getBlockInventory();
                 ItemStack itemStack = ConfigMain.getCChestItem(plugin, chestId);
                 if (itemStack != null) {
-                    Double emcValue = Utils.getEMC(plugin, itemStack);
+                    Double emcValue = ConfigMain.getCChestItemEmc(plugin, chestId, itemStack);
                     if (emcValue != null && emcValue > 0) {
                         // Sintesis pasiva en cofre requiere recargo del +50% de EMC (1.50x) segun el lore oficial
                         Double requiredEmc = Utils.roundDown(emcValue * 1.50, 2);

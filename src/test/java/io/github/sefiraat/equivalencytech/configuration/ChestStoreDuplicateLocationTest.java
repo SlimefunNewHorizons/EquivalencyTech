@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -85,5 +86,21 @@ class ChestStoreDuplicateLocationTest {
         assertEquals(Integer.class, ConfigMain.class
             .getDeclaredMethod("addCChestStore", io.github.sefiraat.equivalencytech.EquivalencyTech.class, Location.class)
             .getReturnType());
+    }
+
+    @Test
+    void elIndiceResuelveElPrimerIdEnElOrdenDeLaSeccion() {
+        // getDChestIdStore paso de barrer la seccion a consultar el indice en memoria: tiene que
+        // seguir devolviendo el primer id escrito, no el menor, y no confundir posiciones.
+        YamlConfiguration c = new YamlConfiguration();
+        Location compartida = new Location(null, 10.0, 64.0, 20.0);
+        c.set(SECCION + ".9", compartida);
+        c.set(SECCION + ".4", compartida);
+
+        ConfigMain.ChestIndex index = ConfigMain.ChestIndex.build(c, SECCION);
+        assertEquals(9, index.firstIdAt(new Location(null, 10.0, 64.0, 20.0)));
+        assertEquals(List.of(4, 9), index.idsAt(compartida));
+        assertNull(index.firstIdAt(new Location(null, 11.0, 64.0, 20.0)));
+        assertNull(index.firstIdAt(null));
     }
 }

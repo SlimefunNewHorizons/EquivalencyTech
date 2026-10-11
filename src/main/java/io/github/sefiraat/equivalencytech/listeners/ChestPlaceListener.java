@@ -159,7 +159,9 @@ public class ChestPlaceListener implements Listener {
 
     @EventHandler(priority = EventPriority.LOW)
     public void onChestInteract(PlayerInteractEvent e) {
-        if (e.getClickedBlock() != null) {
+        // Este evento salta con cualquier clic en cualquier bloque: solo un cofre puede ser un
+        // cofre EMC, asi que el resto sale sin consultar el indice de block_storage.yml.
+        if (e.getClickedBlock() != null && e.getClickedBlock().getType() == Material.CHEST) {
             Location location = e.getClickedBlock().getLocation();
             Integer disID = ConfigMain.getDChestIdStore(plugin, location);
             Integer conID = ConfigMain.getCChestIdStore(plugin, location);

@@ -22,7 +22,9 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ConfigMain {
 
@@ -66,6 +68,17 @@ public class ConfigMain {
     private boolean dirtyBlockStore = false;
     private boolean dirtyDChest = false;
     private boolean dirtyCChest = false;
+
+    /**
+     * Indices en memoria de block_storage.yml. El RunnableEQTick resolvia cada segundo el id de
+     * cada cofre recorriendo la seccion entera (O(n^2) por tick) y cada clic en un bloque hacia
+     * dos barridos mas. Se reconstruyen de forma perezosa tras cualquier alta, baja o relectura.
+     */
+    private ChestIndex dChestIndex;
+    private ChestIndex cChestIndex;
+
+    /** EMC del item configurado en cada cofre condensador; solo se guardan valores conocidos. */
+    private final Map<Integer, Double> cChestItemEmc = new HashMap<>();
 
     public void markAllDirty() {
         dirtyEmc = true;
@@ -264,7 +277,89 @@ public class ConfigMain {
                 e.printStackTrace();
             }
         });
+        invalidateChestIndexes();
         checkBlockStoreIntegrity();
+    }
+
+    private void invalidateChestIndexes() {
+        dChestIndex = null;
+        cChestIndex = null;
+    }
+
+    private ChestIndex dChestIndex() {
+        if (dChestIndex == null) {
+            dChestIndex = ChestIndex.build(blockStoreConfig, DIS_CHEST_CFG);
+        }
+        return dChestIndex;
+    }
+
+    private ChestIndex cChestIndex() {
+        if (cChestIndex == null) {
+            cChestIndex = ChestIndex.build(blockStoreConfig, CON_CHEST_CFG);
+        }
+        return cChestIndex;
+    }
+
+    /**
+     * Foto inmutable de una seccion de block_storage.yml. Nunca se modifica en sitio: una baja
+     * descarta el indice entero, de modo que quien este recorriendo la lista anterior (el tick
+     * mientras colapsa duplicados) no sufre una ConcurrentModificationException.
+     */
+    static final class ChestIndex {
+        // Una posicion POR ID, en el orden de la seccion (mismo contrato que collectLocations).
+        private final List<Location> locations;
+        // Ids numericos de cada posicion, en el orden de la seccion.
+        private final Map<Location, List<Integer>> idsByLocation;
+
+        private ChestIndex(List<Location> locations, Map<Location, List<Integer>> idsByLocation) {
+            this.locations = Collections.unmodifiableList(locations);
+            this.idsByLocation = idsByLocation;
+        }
+
+        static ChestIndex build(FileConfiguration c, String seccion) {
+            List<Location> locations = new ArrayList<>();
+            Map<Location, List<Integer>> ids = new HashMap<>();
+            ConfigurationSection section = c.getConfigurationSection(seccion);
+            if (section != null) {
+                for (String key : section.getKeys(false)) {
+                    Location location = section.getLocation(key);
+                    if (location == null) {
+                        continue;
+                    }
+                    if (location.getWorld() != null) {
+                        locations.add(location);
+                    }
+                    try {
+                        ids.computeIfAbsent(location, l -> new ArrayList<>()).add(Integer.parseInt(key));
+                    } catch (NumberFormatException ignored) {
+                        // Claves que no son ids (basura heredada) no participan.
+                    }
+                }
+            }
+            return new ChestIndex(locations, ids);
+        }
+
+        List<Location> locations() {
+            return locations;
+        }
+
+        /** Primer id de la posicion en el orden de la seccion, como el barrido anterior. */
+        @Nullable
+        Integer firstIdAt(@Nullable Location location) {
+            List<Integer> ids = location == null ? null : idsByLocation.get(location);
+            return ids == null || ids.isEmpty() ? null : ids.get(0);
+        }
+
+        /** Todos los ids de la posicion, de menor a mayor. */
+        List<Integer> idsAt(@Nullable Location location) {
+            List<Integer> ids = location == null ? null : idsByLocation.get(location);
+            if (ids == null) {
+                return new ArrayList<>();
+            }
+            List<Integer> sorted = new ArrayList<>(ids);
+            Collections.sort(sorted);
+            return sorted;
+        }
     }
 
     /**
@@ -496,8 +591,19 @@ public class ConfigMain {
         return list;
     }
 
+    /**
+     * Consulta directa de la ruta: getLearnedItems copia y ordena la lista completa, y el tick
+     * de cofres solo necesita saber si una entrada existe.
+     */
+    public static boolean hasLearnedItem(EquivalencyTech plugin, String uuid, String itemName) {
+        FileConfiguration c = plugin.getConfigMainClass().getLearnedItemsConfig();
+        return c.contains(uuid + "." + ChatColor.stripColor(itemName));
+    }
+
     public static int getLearnedItemAmount(EquivalencyTech plugin, Player player) {
-        return getLearnedItems(plugin, player.getUniqueId().toString()).size();
+        ConfigurationSection section = plugin.getConfigMainClass().getLearnedItemsConfig()
+            .getConfigurationSection(player.getUniqueId().toString());
+        return section == null ? 0 : section.getKeys(false).size();
     }
 
     public static void addPlayerEmc(EquivalencyTech plugin, Player player, Double emcValue, Double totalEmc, int stackAmount) {
@@ -607,28 +713,19 @@ public class ConfigMain {
         Integer id = getNextDChestID(plugin);
         c.set(DIS_CHEST_CFG + "." + id.toString(), location);
         plugin.getConfigMainClass().dirtyBlockStore = true;
+        plugin.getConfigMainClass().invalidateChestIndexes();
         return id;
     }
 
     // Todos los ids que reclaman una posicion, de menor a mayor. getDChestIdStore solo ve el
     // primero, asi que sin esto las rutas de borrado dejaban vivos los duplicados.
     public static List<Integer> getAllDChestIdsStore(EquivalencyTech plugin, Location location) {
-        return collectIdsAt(plugin.getConfigMainClass().blockStoreConfig, DIS_CHEST_CFG, location);
+        return plugin.getConfigMainClass().dChestIndex().idsAt(location);
     }
 
     @Nullable
     public static Integer getDChestIdStore(EquivalencyTech plugin, Location location) {
-        FileConfiguration c = plugin.getConfigMainClass().blockStoreConfig;
-        ConfigurationSection section = c.getConfigurationSection(DIS_CHEST_CFG);
-        if (section != null) {
-            for (String key : section.getKeys(false)) {
-                Location l = section.getLocation(key);
-                if (location.equals(l)) {
-                    return Integer.parseInt(key);
-                }
-            }
-        }
-        return null;
+        return plugin.getConfigMainClass().dChestIndex().firstIdAt(location);
     }
 
     public static void removeDChestStore(EquivalencyTech plugin, Integer id) {
@@ -637,6 +734,7 @@ public class ConfigMain {
         if (section != null) {
             section.set(id.toString(), null);
             plugin.getConfigMainClass().dirtyBlockStore = true;
+            plugin.getConfigMainClass().invalidateChestIndexes();
         }
     }
 
@@ -678,8 +776,9 @@ public class ConfigMain {
         return section == null ? null : section.getLocation(id.toString());
     }
 
+    // Lista inmutable compartida con el indice: no se puede modificar.
     public static List<Location> getAllDChestLocations(EquivalencyTech plugin) {
-        return collectLocations(plugin.getConfigMainClass().blockStoreConfig, DIS_CHEST_CFG);
+        return plugin.getConfigMainClass().dChestIndex().locations();
     }
 
     /** IDs de dissolution_chests que aun tienen una ubicacion serializada. */
@@ -691,18 +790,7 @@ public class ConfigMain {
     // esa posicion sale repetida. Quien recorra esta lista para actuar sobre el bloque tiene que
     // saltarse las repeticiones, o procesara el mismo cofre una vez por duplicado.
     static List<Location> collectLocations(FileConfiguration c, String seccion) {
-        List<Location> locations = new ArrayList<>();
-        ConfigurationSection section = c.getConfigurationSection(seccion);
-        if (section == null) {
-            return locations;
-        }
-        for (String s : section.getKeys(false)) {
-            Location location = section.getLocation(s);
-            if (location != null && location.getWorld() != null) {
-                locations.add(location);
-            }
-        }
-        return locations;
+        return ChestIndex.build(c, seccion).locations();
     }
 
     public static Integer getNextCChestID(EquivalencyTech plugin) {
@@ -727,31 +815,17 @@ public class ConfigMain {
         Integer id = getNextCChestID(plugin);
         c.set(CON_CHEST_CFG + "." + id.toString(), location);
         plugin.getConfigMainClass().dirtyBlockStore = true;
+        plugin.getConfigMainClass().invalidateChestIndexes();
         return id;
     }
 
     public static List<Integer> getAllCChestIdsStore(EquivalencyTech plugin, Location location) {
-        return collectIdsAt(plugin.getConfigMainClass().blockStoreConfig, CON_CHEST_CFG, location);
+        return plugin.getConfigMainClass().cChestIndex().idsAt(location);
     }
 
     // Visible en el paquete para que la prueba de regresion pueda ejercitarla sin un servidor.
     static List<Integer> collectIdsAt(FileConfiguration c, String seccion, Location location) {
-        List<Integer> ids = new ArrayList<>();
-        ConfigurationSection section = c.getConfigurationSection(seccion);
-        if (section == null || location == null) {
-            return ids;
-        }
-        for (String key : section.getKeys(false)) {
-            if (location.equals(section.getLocation(key))) {
-                try {
-                    ids.add(Integer.parseInt(key));
-                } catch (NumberFormatException ignored) {
-                    // Claves que no son ids (basura heredada) no participan.
-                }
-            }
-        }
-        Collections.sort(ids);
-        return ids;
+        return ChestIndex.build(c, seccion).idsAt(location);
     }
 
     static List<Integer> collectIds(FileConfiguration c, String seccion) {
@@ -773,17 +847,7 @@ public class ConfigMain {
 
     @Nullable
     public static Integer getCChestIdStore(EquivalencyTech plugin, Location location) {
-        FileConfiguration c = plugin.getConfigMainClass().blockStoreConfig;
-        ConfigurationSection section = c.getConfigurationSection(CON_CHEST_CFG);
-        if (section != null) {
-            for (String key : section.getKeys(false)) {
-                Location l = section.getLocation(key);
-                if (location.equals(l)) {
-                    return Integer.parseInt(key);
-                }
-            }
-        }
-        return null;
+        return plugin.getConfigMainClass().cChestIndex().firstIdAt(location);
     }
 
     public static void removeCChestStore(EquivalencyTech plugin, Integer id) {
@@ -792,6 +856,7 @@ public class ConfigMain {
         if (section != null) {
             section.set(id.toString(), null);
             plugin.getConfigMainClass().dirtyBlockStore = true;
+            plugin.getConfigMainClass().invalidateChestIndexes();
         }
     }
 
@@ -806,6 +871,7 @@ public class ConfigMain {
         FileConfiguration c = plugin.getConfigMainClass().cChestConfig;
         c.set(String.valueOf(id), null);
         plugin.getConfigMainClass().dirtyCChest = true;
+        plugin.getConfigMainClass().cChestItemEmc.remove(id);
     }
 
     public static boolean isOwnerCChest(EquivalencyTech plugin, Player player, Integer id) {
@@ -833,8 +899,9 @@ public class ConfigMain {
         return section == null ? null : section.getLocation(id.toString());
     }
 
+    // Lista inmutable compartida con el indice: no se puede modificar.
     public static List<Location> getAllCChestLocations(EquivalencyTech plugin) {
-        return collectLocations(plugin.getConfigMainClass().blockStoreConfig, CON_CHEST_CFG);
+        return plugin.getConfigMainClass().cChestIndex().locations();
     }
 
     /** IDs de condensate_chests que aun tienen una ubicacion serializada. */
@@ -852,6 +919,25 @@ public class ConfigMain {
         FileConfiguration c = plugin.getConfigMainClass().cChestConfig;
         c.set(id + ".ITEM", itemStack);
         plugin.getConfigMainClass().dirtyCChest = true;
+        plugin.getConfigMainClass().cChestItemEmc.remove(id);
+    }
+
+    /**
+     * EMC del item configurado en el cofre, cacheado por id: el tick lo pedia cada segundo y
+     * cada consulta repetia SlimefunItem.getByItem y la lectura del PDC. Un null no se guarda,
+     * porque el calculo de EMC corre por tandas tras el arranque y puede aparecer mas tarde.
+     */
+    @Nullable
+    public static Double getCChestItemEmc(EquivalencyTech plugin, Integer id, ItemStack itemStack) {
+        Map<Integer, Double> cache = plugin.getConfigMainClass().cChestItemEmc;
+        Double emc = cache.get(id);
+        if (emc == null) {
+            emc = Utils.getEMC(plugin, itemStack);
+            if (emc != null) {
+                cache.put(id, emc);
+            }
+        }
+        return emc;
     }
 
 }

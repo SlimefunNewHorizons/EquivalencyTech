@@ -26,7 +26,11 @@ public class OrbOpenListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH)
     public void onClick(PlayerInteractEvent e) {
-        if (e.getItem() != null && e.getItem().getItemMeta() != null && (e.getAction().equals(Action.RIGHT_CLICK_AIR) || e.getAction().equals(Action.RIGHT_CLICK_BLOCK))) {
+        // Este evento salta con cada clic de cada jugador y una vez por mano. Antes se pedia
+        // getItemMeta() (copia completa de la meta) de cualquier item en la mano; ahora se mira
+        // primero la accion y luego el PDC, que ya comprueba null y hasItemMeta.
+        Action action = e.getAction();
+        if (action == Action.RIGHT_CLICK_AIR || action == Action.RIGHT_CLICK_BLOCK) {
             Player player = e.getPlayer();
             ItemStack i = e.getItem();
             if (ContainerStorage.isTransmutationOrb(i, plugin)) {

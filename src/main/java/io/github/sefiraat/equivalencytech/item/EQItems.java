@@ -10,6 +10,7 @@ import io.github.sefiraat.equivalencytech.item.builders.MobiusFuel;
 import io.github.sefiraat.equivalencytech.item.builders.RedMatter;
 import io.github.sefiraat.equivalencytech.item.builders.TransmutationOrb;
 import io.github.sefiraat.equivalencytech.misc.Utils;
+import io.github.sefiraat.equivalencytech.statics.ContainerStorage;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.HashMap;
@@ -27,6 +28,8 @@ public class EQItems {
     private final DissolutionChest dissolutionChest;
     private final CondensatorChest condensatorChest;
     private final Map<String, ItemStack> eqItemMap;
+    /** Id PDC (COAL1, DMATTER...) -> nombre de configuracion, la clave de eqItemMap. */
+    private final Map<String, String> eqNameById;
 
     public EquivalencyTech getPlugin() {
         return plugin;
@@ -68,6 +71,10 @@ public class EQItems {
         return eqItemMap;
     }
 
+    public String getEqNameById(String id) {
+        return id == null ? null : eqNameById.get(id);
+    }
+
     public EQItems(EquivalencyTech plugin) {
         this.plugin = plugin;
         transmutationOrb = new TransmutationOrb(plugin);
@@ -80,14 +87,17 @@ public class EQItems {
         condensatorChest = new CondensatorChest(plugin);
 
         eqItemMap = new HashMap<>();
-        eqItemMap.put(Utils.eqNameConfig(transmutationOrb.getItem().getItemMeta().getDisplayName()), transmutationOrb.getItemClone());
-        eqItemMap.put(Utils.eqNameConfig(alchemicalCoal.getItem().getItemMeta().getDisplayName()), alchemicalCoal.getItemClone());
-        eqItemMap.put(Utils.eqNameConfig(mobiusFuel.getItem().getItemMeta().getDisplayName()), mobiusFuel.getItemClone());
-        eqItemMap.put(Utils.eqNameConfig(aeternalisFuel.getItem().getItemMeta().getDisplayName()), aeternalisFuel.getItemClone());
-        eqItemMap.put(Utils.eqNameConfig(darkMatter.getItem().getItemMeta().getDisplayName()), darkMatter.getItemClone());
-        eqItemMap.put(Utils.eqNameConfig(redMatter.getItem().getItemMeta().getDisplayName()), redMatter.getItemClone());
-        eqItemMap.put(Utils.eqNameConfig(dissolutionChest.getItem().getItemMeta().getDisplayName()), dissolutionChest.getItemClone());
-        eqItemMap.put(Utils.eqNameConfig(condensatorChest.getItem().getItemMeta().getDisplayName()), condensatorChest.getItemClone());
+        eqNameById = new HashMap<>();
+        ItemStack[] items = {
+            transmutationOrb.getItem(), alchemicalCoal.getItem(), mobiusFuel.getItem(),
+            aeternalisFuel.getItem(), darkMatter.getItem(), redMatter.getItem(),
+            dissolutionChest.getItem(), condensatorChest.getItem()
+        };
+        for (ItemStack item : items) {
+            String name = Utils.eqNameConfig(item.getItemMeta().getDisplayName());
+            eqItemMap.put(name, item.clone());
+            eqNameById.put(ContainerStorage.getItemID(item, plugin), name);
+        }
 
     }
 

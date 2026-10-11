@@ -106,7 +106,7 @@ public class RunnableEQTick extends BukkitRunnable {
                         if (emcValue != null && emcValue > 0 && Utils.canBeSynth(itemStack, sfItem, isEQ)) {
                             String entryName;
                             if (isEQ) {
-                                entryName = Utils.eqNameConfig(itemStack.getItemMeta().getDisplayName());
+                                entryName = Utils.eqEntryName(plugin, itemStack);
                             } else if (sfItem != null) {
                                 entryName = sfItem.getId();
                             } else {

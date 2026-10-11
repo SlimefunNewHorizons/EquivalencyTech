@@ -324,9 +324,9 @@ public final class GuiTransmutationOrb implements InventoryHolder {
         render();
     }
 
-    private static String itemEntryName(ItemStack itemStack, boolean equivalencyItem, SlimefunItem slimefunItem) {
+    private String itemEntryName(ItemStack itemStack, boolean equivalencyItem, SlimefunItem slimefunItem) {
         if (equivalencyItem) {
-            return Utils.eqNameConfig(itemStack.getItemMeta().getDisplayName());
+            return Utils.eqEntryName(plugin, itemStack);
         }
         if (slimefunItem != null) {
             return slimefunItem.getId();

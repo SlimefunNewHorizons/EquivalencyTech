@@ -33,6 +33,11 @@ public class EmcDefinitions {
     private final Map<String, Double> emcSFBase = new HashMap<>();
     private final Map<Material, Double> emcExtended = new EnumMap<> (Material.class);
     private final Map<String, Double> emcEQ = new HashMap<>();
+    /**
+     * Mismo valor que {@link #emcEQ}, pero indexado por el id PDC del item (COAL1, DMATTER...).
+     * El nombre visible se puede cambiar en un yunque o en la config; el id no.
+     */
+    private final Map<String, Double> emcEQById = new HashMap<>();
     private final Map<String, Double> emcSlimefun = new HashMap<>();
     private boolean recipeRegistryCompatible = true;
     /**
@@ -72,6 +77,10 @@ public class EmcDefinitions {
 
     public Map<String, Double> getEmcEQ() {
         return emcEQ;
+    }
+
+    public Map<String, Double> getEmcEQById() {
+        return emcEQById;
     }
 
     public Map<String, Double> getEmcSlimefun() {
@@ -272,6 +281,10 @@ public class EmcDefinitions {
             }
             DebugLogs.logBoring(plugin, checkedItem.getItemMeta().getDisplayName() + " added to EQ for : " + itemAmount);
             emcEQ.put(checkedItem.getItemMeta().getDisplayName(), roundDown(itemAmount,2));
+            String eqId = ContainerStorage.getItemID(checkedItem, plugin);
+            if (eqId != null) {
+                emcEQById.put(eqId, roundDown(itemAmount,2));
+            }
         }
     }
 

@@ -157,11 +157,27 @@ public class Utils {
             return plugin.getEmcDefinitions().getEmcSlimefun().get(sfItem.getId());
         }
         if (isEQ) {
+            // Por id PDC: buscar por nombre visible lanzaba NPE con un item EQ renombrado en un
+            // yunque, y esa excepcion abortaba el tick entero de cofres cada segundo.
+            String eqId = ContainerStorage.getItemID(itemStack, plugin);
+            if (eqId != null) {
+                return plugin.getEmcDefinitions().getEmcEQById().get(eqId);
+            }
+            // Items EQ sin id (no los crea ningun builder actual): busqueda por nombre, sin la NPE.
             ItemStack eqStack = plugin.getEqItems().getEqItemMap().get(eqNameConfig(itemStack.getItemMeta().getDisplayName()));
-            return plugin.getEmcDefinitions().getEmcEQ().get(eqStack.getItemMeta().getDisplayName());
+            return eqStack == null ? null : plugin.getEmcDefinitions().getEmcEQ().get(eqStack.getItemMeta().getDisplayName());
         } else {
             return plugin.getEmcDefinitions().getEmcExtended().get(itemStack.getType());
         }
+    }
+
+    /**
+     * Nombre con el que se aprende un item EQ. Sale del id PDC para que un item renombrado se
+     * registre con el nombre que el orbe sabe resolver, no con el que le puso el jugador.
+     */
+    public static String eqEntryName(EquivalencyTech plugin, ItemStack itemStack) {
+        String name = plugin.getEqItems().getEqNameById(ContainerStorage.getItemID(itemStack, plugin));
+        return name != null ? name : eqNameConfig(itemStack.getItemMeta().getDisplayName());
     }
 
     public static String eqNameConfig(String name) {

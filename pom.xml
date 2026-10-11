@@ -51,6 +51,10 @@
                 <configuration>
                     <junitArtifactName>org.junit.jupiter:junit-jupiter</junitArtifactName>
                     <trimStackTrace>false</trimStackTrace>
+                    <systemPropertyVariables>
+                        <!-- PaperApiLinkageTest confirma que el classpath trae esta version. -->
+                        <paper.version>${paper.version}</paper.version>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
 
@@ -88,8 +92,12 @@
     </build>
 
     <properties>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <!-- release (no source/target): el jar sale en bytecode Java 21 aunque se compile con el
+             JDK 25 que exigen las APIs 26.x, y javac no deja usar API del JDK posterior a 21. -->
+        <maven.compiler.release>21</maven.compiler.release>
+        <!-- API contra la que se compila y se prueba. Los perfiles paper-26.1 y paper-26.2 la
+             sustituyen; el jar publicado se compila siempre contra esta. -->
+        <paper.version>1.21.11-R0.1-SNAPSHOT</paper.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <sonar.projectKey>Sefiraat_EquivalencyTech</sonar.projectKey>
         <sonar.organization>sefiraat</sonar.organization>
@@ -142,7 +150,7 @@
         <dependency>
             <groupId>io.papermc.paper</groupId>
             <artifactId>paper-api</artifactId>
-            <version>1.21.11-R0.1-SNAPSHOT</version>
+            <version>${paper.version}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
@@ -167,6 +175,90 @@
             <version>5.11.4</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <!-- PaperApiLinkageTest lee el bytecode compilado del plugin. -->
+            <groupId>org.ow2.asm</groupId>
+            <artifactId>asm</artifactId>
+            <version>9.7.1</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+
+    <!--
+        Pruebas contra otras versiones de la API de Paper (ver .github/workflows/paper-api-tests.yml).
+        Las APIs 26.x estan compiladas para Java 25 (class file 69), asi que estos perfiles exigen
+        JDK 25. Slimefun se mantiene en 11.0-Drake-1.21.11: la build 11.0-Universal-26.x usa el
+        paquete upstream io.github.thebusybiscuit.slimefun4 y este addon importa el repaquetado
+        com.github.drakescraft_labs.slimefun4.
+
+          mvn -Ppaper-26.2 test                     compila y prueba contra 26.2
+          mvn test-compile && mvn -Ppaper-26.2 surefire:test
+                                                    prueba el bytecode compilado contra 1.21.11
+                                                    (el del jar publicado) sobre la API 26.2
+    -->
+    <profiles>
+        <profile>
+            <id>paper-26.1</id>
+            <properties>
+                <paper.version>26.1.2.build.74-stable</paper.version>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-enforcer-plugin</artifactId>
+                        <version>3.5.0</version>
+                        <executions>
+                            <execution>
+                                <id>jdk-para-paper-26</id>
+                                <goals>
+                                    <goal>enforce</goal>
+                                </goals>
+                                <configuration>
+                                    <rules>
+                                        <requireJavaVersion>
+                                            <version>[25,)</version>
+                                            <message>paper-api 26.x esta compilada para Java 25: ejecuta Maven con JDK 25.</message>
+                                        </requireJavaVersion>
+                                    </rules>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>paper-26.2</id>
+            <properties>
+                <paper.version>26.2.build.133-stable</paper.version>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-enforcer-plugin</artifactId>
+                        <version>3.5.0</version>
+                        <executions>
+                            <execution>
+                                <id>jdk-para-paper-26</id>
+                                <goals>
+                                    <goal>enforce</goal>
+                                </goals>
+                                <configuration>
+                                    <rules>
+                                        <requireJavaVersion>
+                                            <version>[25,)</version>
+                                            <message>paper-api 26.x esta compilada para Java 25: ejecuta Maven con JDK 25.</message>
+                                        </requireJavaVersion>
+                                    </rules>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
 </project>

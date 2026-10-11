@@ -1,0 +1,69 @@
+# Pruebas del addon contra varias versiones de la API de Paper.
+#
+# QUE HACE
+#   Para cada version de la matriz:
+#   1. Compila el plugin contra esa API y ejecuta todos los tests (compatibilidad de codigo).
+#   2. Solo en 26.x: compila contra 1.21.11, igual que el jar que se publica, y ejecuta
+#      PaperApiLinkageTest con la API 26.x en el classpath (compatibilidad binaria). Detecta lo que
+#      compila pero rompe en el servidor, como un metodo que cambia su tipo de retorno.
+#
+#   Las APIs 26.x estan compiladas para Java 25, por eso esas filas usan JDK 25. El bytecode sigue
+#   siendo Java 21 (maven.compiler.release), asi que el mismo jar vale para servidores 1.21.11.
+#
+# SEGURIDAD
+#   No usa secretos, asi que puede correr en pull requests de forks.
+
+name: Pruebas contra la API de Paper
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'pom.xml'
+      - '.github/workflows/paper-api-tests.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'pom.xml'
+      - '.github/workflows/paper-api-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    name: Paper ${{ matrix.paper }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - paper: '1.21.11'
+            java: '21'
+            profile: ''
+          - paper: '26.1'
+            java: '25'
+            profile: '-Ppaper-26.1'
+          - paper: '26.2'
+            java: '25'
+            profile: '-Ppaper-26.2'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar Java ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: maven
+
+      - name: Compilar y probar contra Paper ${{ matrix.paper }}
+        run: mvn -B -ntp ${{ matrix.profile }} clean test
+
+      - name: Enlazar el bytecode publicado (1.21.11) contra Paper ${{ matrix.paper }}
+        if: matrix.profile != ''
+        run: |
+          mvn -B -ntp clean test-compile
+          mvn -B -ntp ${{ matrix.profile }} surefire:test -Dtest=PaperApiLinkageTest

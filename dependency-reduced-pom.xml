@@ -13,6 +13,13 @@
     </resources>
     <plugins>
       <plugin>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <release>${maven.compiler.release}</release>
+        </configuration>
+      </plugin>
+      <plugin>
         <artifactId>maven-shade-plugin</artifactId>
         <version>3.6.1</version>
         <executions>
@@ -42,6 +49,9 @@
         <configuration>
           <junitArtifactName>org.junit.jupiter:junit-jupiter</junitArtifactName>
           <trimStackTrace>false</trimStackTrace>
+          <systemPropertyVariables>
+            <paper.version>${paper.version}</paper.version>
+          </systemPropertyVariables>
         </configuration>
       </plugin>
       <plugin>
@@ -71,6 +81,68 @@
       </plugin>
     </plugins>
   </build>
+  <profiles>
+    <profile>
+      <id>paper-26.1</id>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-enforcer-plugin</artifactId>
+            <version>3.5.0</version>
+            <executions>
+              <execution>
+                <id>jdk-para-paper-26</id>
+                <goals>
+                  <goal>enforce</goal>
+                </goals>
+                <configuration>
+                  <rules>
+                    <requireJavaVersion>
+                      <version>[25,)</version>
+                      <message>paper-api 26.x esta compilada para Java 25: ejecuta Maven con JDK 25.</message>
+                    </requireJavaVersion>
+                  </rules>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+      <properties>
+        <paper.version>26.1.2.build.74-stable</paper.version>
+      </properties>
+    </profile>
+    <profile>
+      <id>paper-26.2</id>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-enforcer-plugin</artifactId>
+            <version>3.5.0</version>
+            <executions>
+              <execution>
+                <id>jdk-para-paper-26</id>
+                <goals>
+                  <goal>enforce</goal>
+                </goals>
+                <configuration>
+                  <rules>
+                    <requireJavaVersion>
+                      <version>[25,)</version>
+                      <message>paper-api 26.x esta compilada para Java 25: ejecuta Maven con JDK 25.</message>
+                    </requireJavaVersion>
+                  </rules>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+      <properties>
+        <paper.version>26.2.build.133-stable</paper.version>
+      </properties>
+    </profile>
+  </profiles>
   <repositories>
     <repository>
       <id>drakescraft-labs-maven</id>
@@ -136,8 +208,15 @@
         </exclusion>
       </exclusions>
     </dependency>
+    <dependency>
+      <groupId>org.ow2.asm</groupId>
+      <artifactId>asm</artifactId>
+      <version>9.7.1</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
   <properties>
+    <maven.compiler.release>21</maven.compiler.release>
     <sonar.issue.ignore.multicriteria>e1,e2</sonar.issue.ignore.multicriteria>
     <sonar.issue.ignore.multicriteria.e2.ruleKey>java:S125</sonar.issue.ignore.multicriteria.e2.ruleKey>
     <sonar.host.url>https://sonarcloud.io</sonar.host.url>
@@ -145,9 +224,8 @@
     <sonar.issue.ignore.multicriteria.e1.resourceKey>**</sonar.issue.ignore.multicriteria.e1.resourceKey>
     <sonar.issue.ignore.multicriteria.e2.resourceKey>**</sonar.issue.ignore.multicriteria.e2.resourceKey>
     <sonar.issue.ignore.multicriteria.e1.ruleKey>java:S6212</sonar.issue.ignore.multicriteria.e1.ruleKey>
-    <maven.compiler.source>21</maven.compiler.source>
     <sonar.organization>sefiraat</sonar.organization>
-    <maven.compiler.target>21</maven.compiler.target>
     <sonar.projectKey>Sefiraat_EquivalencyTech</sonar.projectKey>
+    <paper.version>1.21.11-R0.1-SNAPSHOT</paper.version>
   </properties>
 </project>

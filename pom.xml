@@ -16,6 +16,17 @@
             </resource>
         </resources>
         <plugins>
+            <!-- Maven's implicit compiler (3.1) ignores maven.compiler.release and defaults
+                 to source/target 5, which JDK 21 rejects before the plugin can compile. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <release>${maven.compiler.release}</release>
+                </configuration>
+            </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>

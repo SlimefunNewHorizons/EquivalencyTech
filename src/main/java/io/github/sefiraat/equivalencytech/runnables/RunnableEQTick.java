@@ -14,7 +14,6 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.text.MessageFormat;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -30,6 +29,14 @@ public class RunnableEQTick extends BukkitRunnable {
 
     private final Set<Integer> warnedDOwners = new HashSet<>();
     private final Set<Integer> warnedCOwners = new HashSet<>();
+
+    /*
+     * A duplicated location is a persistence inconsistency, not proof that either record is
+     * disposable. Keep the warning bounded without modifying a player's chest indexes from the
+     * tick thread; reconciliation is an explicit, backed-up administrator operation.
+     */
+    private final Set<Location> warnedDDuplicateLocations = new HashSet<>();
+    private final Set<Location> warnedCDuplicateLocations = new HashSet<>();
 
     public RunnableEQTick(EquivalencyTech plugin) {
         this.plugin = plugin;
@@ -50,7 +57,7 @@ public class RunnableEQTick extends BukkitRunnable {
             }
             if (location.getWorld().isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
                 if (!vistas.add(location)) {
-                    colapsarDuplicados(ConfigMain.getAllDChestIdsStore(plugin, location), location, true);
+                    detectarDuplicados(ConfigMain.getAllDChestIdsStore(plugin, location), location, true);
                     continue;
                 }
                 Integer storedId = ConfigMain.getDChestIdStore(plugin, location);
@@ -60,7 +67,7 @@ public class RunnableEQTick extends BukkitRunnable {
                 int chestId = storedId;
                 String playerUUID = ConfigMain.getOwnerDChest(plugin, chestId);
                 if (playerUUID == null) {
-                    if (colapsarDuplicados(ConfigMain.getAllDChestIdsStore(plugin, location), location, true)) {
+                    if (detectarDuplicados(ConfigMain.getAllDChestIdsStore(plugin, location), location, true)) {
                         continue;
                     }
                     if (warnedDOwners.add(chestId)) {
@@ -137,7 +144,7 @@ public class RunnableEQTick extends BukkitRunnable {
             }
             if (location.getWorld().isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
                 if (!vistas.add(location)) {
-                    colapsarDuplicados(ConfigMain.getAllCChestIdsStore(plugin, location), location, false);
+                    detectarDuplicados(ConfigMain.getAllCChestIdsStore(plugin, location), location, false);
                     continue;
                 }
                 Integer storedId = ConfigMain.getCChestIdStore(plugin, location);
@@ -147,7 +154,7 @@ public class RunnableEQTick extends BukkitRunnable {
                 int chestId = storedId;
                 String playerUUID = ConfigMain.getOwnerCChest(plugin, chestId);
                 if (playerUUID == null) {
-                    if (colapsarDuplicados(ConfigMain.getAllCChestIdsStore(plugin, location), location, false)) {
+                    if (detectarDuplicados(ConfigMain.getAllCChestIdsStore(plugin, location), location, false)) {
                         continue;
                     }
                     if (warnedCOwners.add(chestId)) {
@@ -190,48 +197,24 @@ public class RunnableEQTick extends BukkitRunnable {
         }
     }
 
-    private boolean colapsarDuplicados(List<Integer> ids, Location location, boolean dissolution) {
+    /**
+     * Detects conflicting location claims without deleting anything. A previous implementation
+     * removed all but one ID while this periodic task ran, which could silently discard a valid
+     * owner or configured output item before the records had been reconciled and backed up.
+     */
+    private boolean detectarDuplicados(List<Integer> ids, Location location, boolean dissolution) {
         if (ids.size() < 2) {
+            (dissolution ? warnedDDuplicateLocations : warnedCDuplicateLocations).remove(location);
             return false;
         }
-        Integer conservado = null;
-        for (Integer id : ids) {
-            String owner = dissolution
-                ? ConfigMain.getOwnerDChest(plugin, id)
-                : ConfigMain.getOwnerCChest(plugin, id);
-            if (owner != null) {
-                conservado = id;
-                break;
-            }
+        Set<Location> warnedLocations = dissolution ? warnedDDuplicateLocations : warnedCDuplicateLocations;
+        if (warnedLocations.add(location)) {
+            EquivalencyTech.getInstance().getLogger().warning(
+                "Registros duplicados de cofre EMC detectados ("
+                    + (dissolution ? "dissolution" : "condensation") + "=" + ids
+                    + ") en " + location
+                    + "; no se modificaron. Requiere migracion explicita con respaldo.");
         }
-        if (conservado == null) {
-            conservado = ids.get(0);
-        }
-        List<Integer> purgados = new ArrayList<>();
-        for (Integer id : ids) {
-            if (id.equals(conservado)) {
-                continue;
-            }
-            if (dissolution) {
-                ConfigMain.removeDChestStore(plugin, id);
-                ConfigMain.removeDChest(plugin, id);
-                warnedDOwners.remove(id);
-                warnedDChests.remove(id);
-            } else {
-                ConfigMain.removeCChestStore(plugin, id);
-                ConfigMain.removeCChest(plugin, id);
-                warnedCOwners.remove(id);
-                warnedCChests.remove(id);
-            }
-            purgados.add(id);
-        }
-        if (purgados.isEmpty()) {
-            return false;
-        }
-        EquivalencyTech.getInstance().getLogger().info(
-            "Registros duplicados de cofre EMC eliminados (" + (dissolution ? "dissolution" : "condensate")
-                + "=" + purgados + ", conservado=" + conservado + ") : la posicion " + location
-                + " solo puede pertenecer a un cofre.");
         return true;
     }
 

@@ -17,6 +17,11 @@
       <option name="url" value="https://papermc.io/repo/repository/maven-public/" />
     </remote-repository>
     <remote-repository>
+      <option name="id" value="drakescraft-labs-maven" />
+      <option name="name" value="drakescraft-labs-maven" />
+      <option name="url" value="https://drakescraft-labs.github.io/maven-repo/" />
+    </remote-repository>
+    <remote-repository>
       <option name="id" value="skullcreator-repo" />
       <option name="name" value="skullcreator-repo" />
       <option name="url" value="https://github.com/deanveloper/SkullCreator/raw/mvn-repo/" />
@@ -30,6 +35,11 @@
       <option name="id" value="repo" />
       <option name="name" value="repo" />
       <option name="url" value="https://repo.mattstudios.me/artifactory/public/" />
+    </remote-repository>
+    <remote-repository>
+      <option name="id" value="papermc" />
+      <option name="name" value="papermc" />
+      <option name="url" value="https://repo.papermc.io/repository/maven-public/" />
     </remote-repository>
     <remote-repository>
       <option name="id" value="sk89q-repo" />

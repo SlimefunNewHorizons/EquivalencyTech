@@ -34,7 +34,7 @@ The deployable artifact is produced in `target/`. It requires
 ## Provenance
 
 Integrated from [SlimefunGuguProject/EquivalencyTech](https://github.com/SlimefunGuguProject/EquivalencyTech).
-Original authorship and the GPL-3.0 license are preserved. DrakesCraft-Labs maintains only the
+Original authorship and the GPL-3.0 license are preserved. SlimefunNewHorizons maintains only the
 1.21.11 compatibility layer and server integration.
 
 ---

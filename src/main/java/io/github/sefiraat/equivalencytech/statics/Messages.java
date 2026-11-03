@@ -121,8 +121,8 @@ public final class Messages {
         message.add("");
         message.add(THEME_NOTICE + "Disable this message in the EquiTech config.");
         message.add("");
-        message.add( THEME_WARNING + "https://github.com/DrakesCraft-Labs/EquivalencyTech");
-        message.add(THEME_WARNING + "https://github.com/DrakesCraft-Labs/EquivalencyTech");
+        message.add( THEME_WARNING + "https://github.com/SlimefunNewHorizons/EquivalencyTech");
+        message.add(THEME_WARNING + "https://github.com/SlimefunNewHorizons/EquivalencyTech");
         return message;
     }
 

@@ -9,7 +9,7 @@ const V3 = 'https://api.modrinth.com/v3';
 const TOKEN = process.env.MODRINTH_TOKEN;
 const SLUG = (process.env.PROJECT_SLUG || '').toLowerCase();
 const NOMBRE = process.env.PROJECT_NAME || SLUG;
-const RESUMEN = (process.env.PROJECT_SUMMARY || 'Addon de Slimefun4 para Paper 1.21.11.').slice(0, 256);
+const RESUMEN = (process.env.PROJECT_SUMMARY || 'EquivalencyTech - High performance Paper 1.21.11 expansion for Slimefun4.').slice(0, 256);
 const ORG_PEDIDA = process.env.MODRINTH_ORG || '';
 
 if (!TOKEN) {
@@ -70,7 +70,7 @@ if (!proyecto) {
     title: NOMBRE,
     description: RESUMEN,
     body: cuerpo,
-    categories: ['utility'],
+    categories: ['utility', 'technology', 'storage'],
     client_side: 'unsupported',
     server_side: 'required',
     project_type: 'mod',
@@ -78,7 +78,7 @@ if (!proyecto) {
     license_id: process.env.PROJECT_LICENSE || 'GPL-3.0-only',
     source_url: `https://github.com/SlimefunNewHorizons/${SLUG}`,
     issues_url: `https://github.com/SlimefunNewHorizons/${SLUG}/issues`,
-    discord_url: 'https://discord.gg/rR7FbfCt9Y',
+    discord_url: 'https://discord.gg/6M8cz86vN7',
     initial_versions: [],
   };
 
@@ -119,7 +119,7 @@ try {
   const patchData = {
     source_url: `https://github.com/SlimefunNewHorizons/${SLUG}`,
     issues_url: `https://github.com/SlimefunNewHorizons/${SLUG}/issues`,
-    discord_url: 'https://discord.gg/rR7FbfCt9Y'
+    discord_url: 'https://discord.gg/6M8cz86vN7'
   };
   await fetch(`${V2}/project/${proyecto.id}`, {
     method: 'PATCH',

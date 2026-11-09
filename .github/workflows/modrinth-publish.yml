@@ -1,4 +1,4 @@
-# Publicacion a Modrinth para un addon de DrakesCraft.
+# Publicacion a Modrinth para un addon de Slimefun: New Horizons (DrakesCraft).
 #
 # QUE HACE
 #   - Compila el addon y publica el jar en Modrinth.
@@ -77,12 +77,15 @@ jobs:
             exit 0
           fi
 
-          MENSAJE="$(git log -1 --pretty=%B || true)"
-
-          # Un hotfix se publica siempre, sin importar el tamano del cambio.
-          if echo "$MENSAJE" | grep -qiE '\[URGENT\]|\[HOTFIX\]|fix: *dupe|fix: *crash|dupe|exploit'; then
+          # Un hotfix se publica siempre, sin importar el tamano del cambio. Se buscan los mensajes
+          # de TODOS los commits del push, no solo el ultimo: un fix suele venir seguido de un
+          # "chore(release): bump version", y mirar solo ese ultimo mensaje hacia que el fix se
+          # pasara por alto y la release se omitiria.
+          RANGO="${{ github.event.before }}..${{ github.sha }}"
+          MENSAJES="$(git log --pretty=%B "$RANGO" 2>/dev/null || git log -3 --pretty=%B)"
+          if echo "$MENSAJES" | grep -qiE '\[URGENT\]|\[HOTFIX\]|\[RELEASE\]|modrinth|ci:|fix: *dupe|fix: *crash|dupe|exploit|^fix\(|^hotfix'; then
             echo "publicar=true"  >> "$GITHUB_OUTPUT"
-            echo "motivo=hotfix detectado en el mensaje del commit"  >> "$GITHUB_OUTPUT"
+            echo "motivo=hotfix detectado en los mensajes del push"  >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -95,6 +98,21 @@ jobs:
           fi
 
           echo "Lineas de codigo cambiadas: $LINEAS (umbral $UMBRAL_LINEAS)"
+
+          # Si la version del pom no ha cambiado respecto al commit anterior, el build seria
+          # identico al ya publicado. Modrinth rechaza una version repetida, asi que en vez de
+          # subir un duplicado se salta. Esto es lo que paso cuando el bump a 4.4 se quedo sin
+          # commitear: Actions reconstruyo y volvio a subir un 4.3.
+          VER_NUEVA="$(mvn -q -ntp help:evaluate -Dexpression=project.version -DforceStdout 2>/dev/null | tail -n1 | tr -d '[:space:]' || true)"
+          if git show HEAD~1:pom.xml >/tmp/pom-prev.xml 2>/dev/null; then
+            VER_PREV="$(mvn -q -ntp -f /tmp/pom-prev.xml help:evaluate -Dexpression=project.version -DforceStdout 2>/dev/null | tail -n1 | tr -d '[:space:]' || true)"
+            if [ -n "$VER_NUEVA" ] && [ -n "$VER_PREV" ] && [ "$VER_NUEVA" = "$VER_PREV" ]; then
+              echo "publicar=false" >> "$GITHUB_OUTPUT"
+              echo "motivo=la version del pom sigue en $VER_NUEVA; no hay version nueva que publicar" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
           if [ "$LINEAS" -ge "${UMBRAL_LINEAS}" ]; then
             echo "publicar=true"  >> "$GITHUB_OUTPUT"
             echo "motivo=cambio de $LINEAS lineas (>= $UMBRAL_LINEAS)"  >> "$GITHUB_OUTPUT"
@@ -118,16 +136,75 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-          cache: maven
+
+      - name: "Clonar dependencias del Maven Repo de Slimefun: New Horizons"
+        run: |
+          mkdir -p ~/.m2/repository
+          git clone --depth 1 https://github.com/SlimefunNewHorizons/maven-repo.git /tmp/drakes-maven-repo
+          cp -rn /tmp/drakes-maven-repo/com ~/.m2/repository/ || true
+          python3 -c "
+          import os, shutil
+          repo = os.path.expanduser('~/.m2/repository/com/github/drakescraft_labs')
+          if os.path.exists(repo):
+              for d in os.listdir(repo):
+                  dp = os.path.join(repo, d)
+                  if os.path.isdir(dp):
+                      for v in list(os.listdir(dp)):
+                          vp = os.path.join(dp, v)
+                          if os.path.isdir(vp) and not v.endswith('-SNAPSHOT'):
+                              snap_v = v + '-SNAPSHOT'
+                              snap_p = os.path.join(dp, snap_v)
+                              if not os.path.exists(snap_p):
+                                  shutil.copytree(vp, snap_p)
+                                  for f in os.listdir(snap_p):
+                                      if v in f:
+                                          os.rename(os.path.join(snap_p, f), os.path.join(snap_p, f.replace(v, snap_v)))
+          "
 
       - name: Compilar
-        run: mvn -B -ntp package -DskipTests
+        run: |
+          if [ -f pom.xml ]; then
+            echo "Compilando con Maven"
+            mvn -B -ntp package -DskipTests
+          elif [ -f gradlew ]; then
+            echo "Compilando con Gradle Wrapper"
+            chmod +x gradlew
+            ./gradlew build -x test
+          elif [ -f build.gradle ] || [ -f build.gradle.kts ]; then
+            echo "Compilando con Gradle"
+            gradle build -x test
+          fi
+
+      - name: Verificar que el jar existe y es coherente con la version del pom
+        # Sin este paso, un pom sin commitear hace que Actions suba un build con la version del
+        # commit anterior, y Modrinth lo rechaza como duplicado o reparte un binario viejo. Se
+        # compara el nombre del jar con la version real del pom para que el fallo sea ruidoso.
+        run: |
+          set -euo pipefail
+          VER_POM="$(mvn -q -ntp help:evaluate -Dexpression=project.version -DforceStdout 2>/dev/null | tail -n1 | tr -d '[:space:]')"
+          JARS="$(find target -maxdepth 2 -name '*.jar' ! -name 'original-*' ! -name '*-sources.jar' ! -name '*-javadoc.jar')"
+          if [ -z "$JARS" ]; then echo "::error::No se encontro ningun jar en target/"; exit 1; fi
+          echo "Version del pom: $VER_POM"
+          echo "Jars encontrados:"; echo "$JARS"
+          COINCIDE=0
+          for j in $JARS; do
+            case "$j" in
+              *"$VER_POM"*) COINCIDE=1 ;;
+            esac
+          done
+          if [ "$COINCIDE" -ne 1 ]; then
+            echo "::error::El nombre de ningun jar contiene la version del pom ($VER_POM)."
+            echo "::error::Sube el cambio de version en pom.xml al repo antes de publicar, o el"
+            echo "::error::build se publicara con una version equivocada."
+            exit 1
+          fi
+          echo "Version coherente con el nombre del jar."
 
       - name: Localizar el jar
         id: jar
         run: |
           set -euo pipefail
-          RUTA="$(find target -maxdepth 1 -name '*.jar' \
+          RUTA="$(find target -maxdepth 2 -name '*.jar' \
                   ! -name 'original-*' ! -name '*-sources.jar' ! -name '*-javadoc.jar' \
                   | head -n1)"
           if [ -z "$RUTA" ]; then echo "No se encontro el jar compilado"; exit 1; fi
@@ -187,8 +264,13 @@ jobs:
             paper
             purpur
             spigot
+          # Versiones soportadas: el jar (API 1.21.11, bytecode Java 21) funciona en las tres.
           game-versions: |
-            1.21.x
+            1.21.11
+            26.1
+            26.1.1
+            26.1.2
+            26.2
           changelog: ${{ needs.decidir.outputs.motivo }}
           # No fallar si algun campo opcional falta.
           modrinth-featured: false

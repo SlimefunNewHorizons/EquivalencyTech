@@ -1,3 +1,5 @@
 target/
 *.class
-graphify-out/
+graphify-out/dependency-reduced-pom.xml
+build/
+.gradle/
